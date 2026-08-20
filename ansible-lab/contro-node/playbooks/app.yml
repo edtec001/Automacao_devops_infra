@@ -1,0 +1,121 @@
+---
+- name: Configurar servidor de aplicação Java (Notes)
+  hosts: app01
+  become: yes
+
+  vars:
+    app_user: app
+    app_dir: /opt/notes
+    repo_url: https://github.com/callicoder/spring-boot-mysql-rest-api-tutorial.git
+
+    dbhost: db01
+    dbname: notes
+    dbusername: notesapp
+    dbpassword: devopsmaonamassa
+
+  roles:
+    - configuracao-default-so
+
+  tasks:
+
+    # ---------------------------------------------------
+    # USUÁRIO DA APLICAÇÃO
+    # ---------------------------------------------------
+    - name: Criar usuário da aplicação
+      ansible.builtin.user:
+        name: "{{ app_user }}"
+        comment: Usuario de aplicação
+        create_home: yes
+        shell: /bin/bash
+
+    # ---------------------------------------------------
+    # DEPENDÊNCIAS
+    # ---------------------------------------------------
+    - name: Instalar dependências do sistema
+      ansible.builtin.dnf:
+        name:
+          - git
+          - maven
+          - java-11-openjdk-devel
+        state: present
+
+    # ---------------------------------------------------
+    # LIMPEZA PREVENTIVA (EVITA ERROS DE GIT)
+    # ---------------------------------------------------
+    - name: Remover diretório antigo da aplicação (se existir)
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: absent
+
+    # ---------------------------------------------------
+    # DIRETÓRIO DA APLICAÇÃO
+    # ---------------------------------------------------
+    - name: Criar diretório da aplicação
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0755"
+
+    # ---------------------------------------------------
+    # CLONE DO REPOSITÓRIO (USUÁRIO CORRETO)
+    # ---------------------------------------------------
+    - name: Clonar repositório da aplicação
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_dir }}"
+        version: master
+        update: yes
+      become_user: "{{ app_user }}"
+
+    # ---------------------------------------------------
+    # CONFIGURAÇÃO DO BANCO
+    # ---------------------------------------------------
+    - name: Configurar application.properties
+      ansible.builtin.template:
+        src: application.properties
+        dest: "{{ app_dir }}/src/main/resources/application.properties"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0644"
+
+    # ---------------------------------------------------
+    # BUILD DA APLICAÇÃO
+    # ---------------------------------------------------
+    - name: Compilar aplicação com Maven
+      ansible.builtin.shell: mvn clean package -DskipTests
+      args:
+        chdir: "{{ app_dir }}"
+      become_user: "{{ app_user }}"
+
+    # ---------------------------------------------------
+    # SYSTEMD
+    # ---------------------------------------------------
+    - name: Instalar serviço systemd da aplicação
+      ansible.builtin.template:
+        src: etc/systemd/system/notes.service
+        dest: /etc/systemd/system/notes.service
+        mode: "0644"
+      notify:
+        - reload systemd
+        - restart notes
+
+    # ---------------------------------------------------
+    # GARANTIR SERVIÇO ATIVO
+    # ---------------------------------------------------
+    - name: Garantir serviço Notes iniciado
+      ansible.builtin.systemd:
+        name: notes
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: restart notes
+      ansible.builtin.systemd:
+        name: notes
+        state: restarted

@@ -1,0 +1,29 @@
+--------------------------------------
+
+Instru��es B�sicas - Leia com Aten��o:
+
+--------------------------------------
+
+
+1) Crie em seu computador uma pasta chamada "injetor" e copie para ela todos os arquivos contidos no link. 
+IMPORTANTE: N�o salve em pasta diferente da mencionada, caso contr�rio haver� erro de compila��o!
+
+2) Abra com a plataforma Arduino a sketch principal "injetor.ino". Abrir outra sketch tamb�m causar� erro de compila��o.
+
+3) Siga os passos mostrados no v�deo.
+
+
+Muito obrigado e sucesso na montagem!
+
+--------------------
+Links interessantes:
+--------------------
+preço
+Construa um Injetor de Sinais Automotivo para sua bancada
+https://youtu.be/G26TqnncUgk
+
+Monte um conversor de sinais de Rota��o e Fase e d� um upgrade no Injetor de Sinais Automotivo!
+https://youtu.be/JjvgDXO4vnk
+
+Construa um Simulador de Inje��o Eletr�nica
+https://youtube.com/playlist?list=PLGSvANoAb-BubImytiPCfnmZJkgTqbXHz

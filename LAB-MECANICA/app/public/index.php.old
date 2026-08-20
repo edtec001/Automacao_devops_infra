@@ -1,0 +1,300 @@
+<?php
+
+require_once 'config.php';
+
+function totalStatus(PDO $pdo, string $status): int
+{
+    $sql = "
+        SELECT COUNT(*)
+        FROM veiculos
+        WHERE status = ?
+        AND saida IS NULL
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$status]);
+
+    return (int) $stmt->fetchColumn();
+}
+
+$entrada   = totalStatus($pdo, 'ENTRADA');
+$orcamento = totalStatus($pdo, 'ORCAMENTO');
+$servico   = totalStatus($pdo, 'SERVICO');
+$liberado  = totalStatus($pdo, 'LIBERADO');
+
+$stmt = $pdo->query("
+    SELECT
+        placa,
+        marca,
+        modelo,
+        ano,
+        cor,
+        km_atual,
+        entrada,
+        status
+    FROM veiculos
+    WHERE saida IS NULL
+    ORDER BY entrada DESC
+");
+
+$veiculos = $stmt->fetchAll();
+
+?>
+
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Oficina Control</title>
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+
+<header>
+
+    <div>
+
+        <h1>🔧 Oficina Control</h1>
+
+        <p>Controle da oficina mecânica</p>
+
+    </div>
+
+</header>
+
+<main>
+
+    <section class="cards">
+
+        <div class="card vermelho">
+
+            <span>🔴</span>
+
+            <h2><?= $entrada ?></h2>
+
+            <p>Entrada</p>
+
+        </div>
+
+        <div class="card amarelo">
+
+            <span>🟡</span>
+
+            <h2><?= $orcamento ?></h2>
+
+            <p>Aguardando orçamento</p>
+
+        </div>
+
+        <div class="card azul">
+
+            <span>🔵</span>
+
+            <h2><?= $servico ?></h2>
+
+            <p>Em serviço</p>
+
+        </div>
+
+        <div class="card verde">
+
+            <span>🟢</span>
+
+            <h2><?= $liberado ?></h2>
+
+            <p>Liberados</p>
+
+        </div>
+
+    </section>
+
+
+    <section class="acoes">
+
+        <a href="entrada.php" class="botao">
+
+            + Entrada de veículo
+
+        </a>
+
+        <form method="GET">
+
+            <input
+                type="text"
+                name="placa"
+                placeholder="Pesquisar placa"
+                maxlength="10"
+            >
+
+            <button type="submit">
+
+                Pesquisar
+
+            </button>
+
+        </form>
+
+    </section>
+
+
+    <section class="tabela">
+
+        <h2>Veículos na oficina</h2>
+
+        <table>
+
+            <thead>
+
+                <tr>
+
+                    <th>Placa</th>
+                    <th>Veículo</th>
+                    <th>Ano</th>
+                    <th>Entrada</th>
+                    <th>Status</th>
+                    <th>Ação</th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+<?php
+
+$placaPesquisa = trim($_GET['placa'] ?? '');
+
+if ($placaPesquisa !== '') {
+
+    $stmt = $pdo->prepare("
+        SELECT
+            placa,
+            marca,
+            modelo,
+            ano,
+            cor,
+            km_atual,
+            entrada,
+            status
+        FROM veiculos
+        WHERE saida IS NULL
+        AND placa LIKE ?
+        ORDER BY entrada DESC
+    ");
+
+    $stmt->execute([
+        '%' . $placaPesquisa . '%'
+    ]);
+
+    $veiculos = $stmt->fetchAll();
+}
+
+?>
+
+<?php if (!$veiculos): ?>
+
+                <tr>
+
+                    <td colspan="6">
+
+                        Nenhum veículo encontrado.
+
+                    </td>
+
+                </tr>
+
+<?php else: ?>
+
+<?php foreach ($veiculos as $veiculo): ?>
+
+                <tr>
+
+                    <td>
+
+                        <strong>
+                            <?= htmlspecialchars($veiculo['placa']) ?>
+                        </strong>
+
+                    </td>
+
+                    <td>
+
+                        <?= htmlspecialchars(
+                            $veiculo['marca'] . ' ' .
+                            $veiculo['modelo']
+                        ) ?>
+
+                    </td>
+
+                    <td>
+
+                        <?= htmlspecialchars(
+                            $veiculo['ano'] ?? '-'
+                        ) ?>
+
+                    </td>
+
+                    <td>
+
+                        <?= date(
+                            'd/m/Y H:i',
+                            strtotime($veiculo['entrada'])
+                        ) ?>
+
+                    </td>
+
+                    <td>
+
+                        <span class="status status-<?= strtolower(
+                            $veiculo['status']
+                        ) ?>">
+
+                            <?= htmlspecialchars(
+                                $veiculo['status']
+                            ) ?>
+
+                        </span>
+
+                    </td>
+
+                    <td>
+
+                        <a
+                            class="link"
+                            href="status.php?placa=<?= urlencode(
+                                $veiculo['placa']
+                            ) ?>"
+                        >
+
+                            Gerenciar
+
+                        </a>
+
+                    </td>
+
+                </tr>
+
+<?php endforeach; ?>
+
+<?php endif; ?>
+
+            </tbody>
+
+        </table>
+
+    </section>
+
+</main>
+
+</body>
+
+</html>

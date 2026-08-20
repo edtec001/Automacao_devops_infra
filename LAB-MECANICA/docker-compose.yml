@@ -1,0 +1,41 @@
+services:
+  app:
+    build: ./app
+    container_name: oficina_app
+    ports:
+      - "8181:80"
+    environment:
+      DB_HOST: db
+      DB_NAME: oficina
+      DB_USER: oficina
+      DB_PASSWORD: oficina123
+    volumes:
+      - ./app/public:/var/www/html
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.4
+    container_name: oficina_db
+    environment:
+      MYSQL_DATABASE: oficina
+      MYSQL_USER: oficina
+      MYSQL_PASSWORD: oficina123
+      MYSQL_ROOT_PASSWORD: root123
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./app/sql:/docker-entrypoint-initdb.d:ro
+
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-uoficina", "-poficina123" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

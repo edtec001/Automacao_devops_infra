@@ -1,0 +1,29 @@
+------------------------------
+Painel Automotivo Experimental
+------------------------------
+1) Crie uma pasta no HD do computador, com nome "painel_com_display"
+2) copie todos os arquivos necessários para esta pasta
+3) Instale a biblioteca "U8G2" by Oliver Versão 2.35.30
+
+Link para o video
+https://youtu.be/qjR9EJIreZw
+
+---------------------------------------------------------
+Lista de materiais
+
+Arduino Nano
+Display Gráfico 128x64 com controlador ST7920
+U1, U2 - Optoacoplador PC817
+U3 - Regulador 7805
+
+R1,R2  - 1K 
+R3 - 4k7 para sensor Hall de 12 volts / 220R para sensor de 5 volts
+R4 - 220R (consulte o vídeo e sketch)
+R5 - 1K (consulte o vídeo e sketch)
+R6 - 220R (resistor do backlight do display)
+D1,D2,D3,D4 - Diodo Zener 5,1 V x 1/2 Watt
+D5 - 1N4007
+C1,C3 - Capacitor de poliester 50 volts
+C3 - Eletrolítico 1 microFarad x 16 volts
+---------------------------------------------------------
+

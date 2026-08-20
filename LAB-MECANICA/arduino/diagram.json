@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "author": "Oficina Mechanical Panel",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "uno", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-led", "id": "led_vermelho", "top": -100, "left": 100, "attrs": { "color": "red" } },
+    { "type": "wokwi-led", "id": "led_amarelo", "top": -100, "left": 150, "attrs": { "color": "yellow" } },
+    { "type": "wokwi-led", "id": "led_azul", "top": -100, "left": 200, "attrs": { "color": "blue" } },
+    { "type": "wokwi-led", "id": "led_verde", "top": -100, "left": 250, "attrs": { "color": "green" } }
+  ],
+  "connections": [
+    [ "uno:GND.1", "led_vermelho:C", "black", [] ],
+    [ "uno:GND.1", "led_amarelo:C", "black", [] ],
+    [ "uno:GND.1", "led_azul:C", "black", [] ],
+    [ "uno:GND.1", "led_verde:C", "black", [] ],
+    [ "uno:2", "led_vermelho:A", "red", [] ],
+    [ "uno:3", "led_amarelo:A", "yellow", [] ],
+    [ "uno:4", "led_azul:A", "blue", [] ],
+    [ "uno:5", "led_verde:A", "green", [] ]
+  ]
+}

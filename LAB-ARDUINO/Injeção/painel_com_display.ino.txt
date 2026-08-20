@@ -1,0 +1,99 @@
+#include <U8g2lib.h>
+
+// Construtor
+//U8G2_ST7920_128X64_1_SW_SPI u8g2( U8G2_R0,  /* clock=*/ A2,  /* data=*/  A1,  /* cs=*/    A0,  /* reset=*/ U8X8_PIN_NONE);
+
+U8G2_ST7920_128X64_F_SW_SPI u8g2( U8G2_R0, A2, A1, A0, U8X8_PIN_NONE);
+
+
+#define VMAX 200                         // velocidade máxima do velocímetro
+#define ANG_ZERO  (210.0 * DEG_TO_RAD)   // Ângulo que inicia os instrumentos
+#define ANG_SWEEP (-240.0 * DEG_TO_RAD)  // Inversão do ângulo de início
+
+#define PULSOS_POR_VOLTA  4              // Pulsos por volta da roda
+#define DIAMETRO_PNEU_M  0.561           // Diâmetro do pneu em metros
+#define PIN_SPEED 2                      // Pino A2 para receber sinal de km (INT0 no Arduino Nano)
+
+int cx = 32;     // exemplo: centro do velocímetro
+int cy = 32;
+int radius = 28;
+
+
+
+#define PIN_RPM   3                      // Pino A3 para receber sinal de RPM
+
+unsigned long lastCalcTime = 0;
+unsigned long lastPulseTime = 0;
+float velocidade = 0.0;
+float velocidade_filtrada = 0.0;
+volatile unsigned long pulseCount = 0;
+bool staticDrawn = false;
+
+
+
+// valores simulados (por enquanto)
+int rpm = 3250;
+
+void speedISR() {
+  pulseCount++;
+}
+
+
+void calculateSpeed() {
+
+  unsigned long now = millis();
+
+
+  // Se passou 500 ms (janela de aquisição), 
+  // calcula a quantidade de pulsos recebidos
+  
+  if (now - lastCalcTime >= 500) {
+
+    noInterrupts();
+    unsigned long pulses = pulseCount;
+    pulseCount = 0;
+    interrupts();
+
+    float circ = DIAMETRO_PNEU_M * 3.1416;
+    float metros = (pulses / (float)PULSOS_POR_VOLTA) * circ;
+
+    velocidade = (metros / 0.5) * 3.6;
+    
+   float alpha = 0.45;   // 0.1 = muito suave | 0.3 = mais rápido // 0.45= sweet point
+   velocidade_filtrada = alpha * velocidade +   (1.0 - alpha) * velocidade_filtrada;
+
+    lastCalcTime = now;  // zera a janela de aquisição
+  }
+}
+
+
+void drawStaticLayout() {
+
+  drawSpeedometer();
+  drawSpeedTicks();
+  drawTachometer();
+}
+
+
+
+void setup() {
+  u8g2.begin();
+  pinMode(PIN_SPEED, INPUT_PULLUP);  // sensor puxando internamente para o GND
+  attachInterrupt( digitalPinToInterrupt(PIN_SPEED), speedISR, FALLING );
+ }
+
+
+
+void loop() {
+  calculateSpeed();  // Calcula a velocidade;
+  u8g2.firstPage();
+  do {
+    drawSpeedometer();                     // Desenha o velocimetro
+    drawSpeedTicks(); 
+    drawSpeedNeedle(velocidade_filtrada);  // Desenha a posição da agulha de acordo com a velocidade
+    drawTachometer();                      // Desenha o tacômetro
+    drawValues();                          // Imprime os valores
+  } while (u8g2.nextPage());
+
+//  delay(200);
+}
