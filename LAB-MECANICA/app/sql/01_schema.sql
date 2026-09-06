@@ -188,6 +188,27 @@ CREATE TABLE IF NOT EXISTS servicos (
 -- =====================================================
 -- PEÇAS
 -- =====================================================
+-- FORNECEDORES DE AUTOPEÇAS
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS fornecedores_autopecas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nome_fantasia VARCHAR(150) NOT NULL,
+    razao_social VARCHAR(150) NULL,
+    cnpj VARCHAR(20) NULL,
+    telefone VARCHAR(30) NULL,
+    vendedor_contato VARCHAR(100) NULL,
+    email VARCHAR(150) NULL,
+    cidade_estado VARCHAR(100) NULL,
+    observacoes TEXT NULL,
+    ativo TINYINT(1) NOT NULL DEFAULT 1,
+    criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- =====================================================
+-- PEÇAS
+-- =====================================================
 
 CREATE TABLE IF NOT EXISTS pecas (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -196,7 +217,11 @@ CREATE TABLE IF NOT EXISTS pecas (
 
     nome VARCHAR(150) NOT NULL,
 
+    categoria VARCHAR(100) DEFAULT 'Geral',
+
     fabricante VARCHAR(100),
+
+    fornecedor_id INT NULL,
 
     unidade VARCHAR(20) DEFAULT 'UN',
 
@@ -215,7 +240,12 @@ CREATE TABLE IF NOT EXISTS pecas (
     atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         ON UPDATE CURRENT_TIMESTAMP,
 
-    UNIQUE KEY uk_codigo (codigo)
+    UNIQUE KEY uk_codigo (codigo),
+
+    CONSTRAINT fk_peca_fornecedor
+        FOREIGN KEY (fornecedor_id)
+        REFERENCES fornecedores_autopecas(id)
+        ON DELETE SET NULL
 );
 
 -- =====================================================
@@ -334,9 +364,108 @@ CREATE TABLE IF NOT EXISTS usuarios (
 
     ativo TINYINT(1) NOT NULL DEFAULT 1,
 
+    trocar_senha TINYINT(1) NOT NULL DEFAULT 0,
+
     criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     UNIQUE KEY uk_usuario (usuario)
+);
+
+-- =====================================================
+-- NOTAS FISCAIS
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS notas_fiscais (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ordem_servico_id INT NULL,
+    numero_nf VARCHAR(50) NOT NULL,
+    chave_acesso VARCHAR(50) NULL,
+    tipo ENUM('NFS-E', 'NF-E', 'RECIBO_FISCAL') NOT NULL DEFAULT 'NFS-E',
+    cliente_nome VARCHAR(150) NOT NULL,
+    cliente_cpf_cnpj VARCHAR(20) NULL,
+    valor_servicos DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    valor_pecas DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    valor_impostos DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    valor_total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    aliquota_imposto DECIMAL(5,2) DEFAULT 5.00,
+    status ENUM('EMITIDA', 'CANCELADA') NOT NULL DEFAULT 'EMITIDA',
+    observacoes TEXT NULL,
+    data_emissao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_nf_os
+        FOREIGN KEY (ordem_servico_id)
+        REFERENCES ordens_servico(id)
+        ON DELETE SET NULL
+);
+
+-- =====================================================
+-- CHECKLIST DE REVISÃO E PROCEDIMENTOS
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS checklist_revisao (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ordem_servico_id INT NULL,
+    placa VARCHAR(10) NOT NULL,
+    mecanico_id INT NULL,
+    data_checklist DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    km_veiculo INT NULL,
+    status_geral ENUM('EM_ANDAMENTO', 'APROVADO', 'RECOMENDACOES') NOT NULL DEFAULT 'EM_ANDAMENTO',
+    observacoes_gerais TEXT NULL,
+    criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_checklist_os
+        FOREIGN KEY (ordem_servico_id)
+        REFERENCES ordens_servico(id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_checklist_veiculo
+        FOREIGN KEY (placa)
+        REFERENCES veiculos(placa)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_checklist_mecanico
+        FOREIGN KEY (mecanico_id)
+        REFERENCES funcionarios(id)
+        ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS checklist_revisao_itens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    checklist_id INT NOT NULL,
+    categoria VARCHAR(100) NOT NULL,
+    item_nome VARCHAR(150) NOT NULL,
+    status_item ENUM('CONFORME', 'REPARADO', 'ATENCAO', 'NAO_APLICAVEL') NOT NULL DEFAULT 'CONFORME',
+    observacao VARCHAR(255) NULL,
+
+    CONSTRAINT fk_item_checklist
+        FOREIGN KEY (checklist_id)
+        REFERENCES checklist_revisao(id)
+        ON DELETE CASCADE
+);
+
+-- =====================================================
+-- DESPESAS OPERACIONAIS
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS despesas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    descricao VARCHAR(255) NOT NULL,
+    categoria ENUM(
+        'ALUGUEL',
+        'ENERGIA_AGUA',
+        'SALARIOS',
+        'FERRAMENTAS',
+        'PECAS_REPOSICAO',
+        'IMPOSTOS',
+        'OUTROS'
+    ) NOT NULL DEFAULT 'OUTROS',
+    valor DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    data_vencimento DATE NOT NULL,
+    data_pagamento DATE NULL,
+    status ENUM('PENDENTE', 'PAGO') NOT NULL DEFAULT 'PAGO',
+    observacao TEXT NULL,
+    criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- =====================================================

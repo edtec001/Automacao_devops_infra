@@ -1,6 +1,9 @@
 <?php
 
 require_once 'config.php';
+require_once 'auth.php';
+
+$usuarioLogado = exigirAutenticacao();
 
 $placa = strtoupper(trim($_GET['placa'] ?? $_POST['placa'] ?? ''));
 

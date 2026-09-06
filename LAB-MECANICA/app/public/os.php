@@ -1,6 +1,9 @@
 <?php
 
 require_once 'config.php';
+require_once 'auth.php';
+
+$usuarioLogado = exigirAutenticacao();
 
 $id = (int) ($_GET['id'] ?? 0);
 $placa = strtoupper(trim($_GET['placa'] ?? ''));
@@ -570,8 +573,10 @@ include 'header.php';
             </div>
         <?php endif; ?>
 
-        <div class="acoes-print" style="margin-top: 20px; display: flex; gap: 10px;">
+        <div class="acoes-print" style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
             <button onclick="window.print()" class="botao">🖨️ Imprimir Ordem de Serviço</button>
+            <a href="checklist.php?os_id=<?= $os['id'] ?>&placa=<?= urlencode($os['placa']) ?>" class="botao secundario" style="background: #0284c7;">📋 Checklist de Revisão</a>
+            <a href="notas.php?emitir_os=<?= $os['id'] ?>" class="botao secundario" style="background: #16a34a;">📄 Emitir Nota Fiscal</a>
             <a href="status.php?placa=<?= urlencode($os['placa']) ?>" class="botao secundario">⚙️ Gerenciar Status</a>
             <a href="index.php" class="botao secundario">← Voltar ao Dashboard</a>
         </div>

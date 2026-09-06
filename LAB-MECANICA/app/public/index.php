@@ -1,6 +1,9 @@
 <?php
 
 require_once 'config.php';
+require_once 'auth.php';
+
+$usuarioLogado = exigirAutenticacao();
 
 
 /*
@@ -415,7 +418,7 @@ include 'header.php';
 
     </a>
 
-
+<?php if (temPermissao(['ESTOQUE', 'MECANICO'])): ?>
     <a
         href="estoque.php"
         class="botao secundario"
@@ -424,16 +427,41 @@ include 'header.php';
         📦 Controle de estoque
 
     </a>
+<?php endif; ?>
 
+
+    <a
+        href="checklist.php"
+        class="botao secundario"
+    >
+        📋 Checklist
+    </a>
+
+<?php if (temPermissao(['ATENDIMENTO'])): ?>
+    <a
+        href="notas.php"
+        class="botao secundario"
+    >
+        📄 Notas Fiscais
+    </a>
+<?php endif; ?>
+
+<?php if (temPermissao(['ADMIN', 'GERENTE'])): ?>
+    <a
+        href="financeiro.php"
+        class="botao secundario"
+        style="background: #16a34a;"
+    >
+        💰 Financeiro
+    </a>
 
     <a
         href="funcionarios.php"
         class="botao secundario"
     >
-
         👨‍🔧 Equipe
-
     </a>
+<?php endif; ?>
 
 
     <form method="GET">
@@ -637,9 +665,18 @@ include 'header.php';
                             $veiculo['placa']
                         ) ?>"
                     >
-
                         📄 O.S.
+                    </a>
 
+                    |
+
+                    <a
+                        class="link"
+                        href="checklist.php?placa=<?= urlencode(
+                            $veiculo['placa']
+                        ) ?>"
+                    >
+                        📋 Checklist
                     </a>
 
                 </td>

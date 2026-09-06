@@ -1,6 +1,10 @@
 <?php
 
 require_once 'config.php';
+require_once 'auth.php';
+
+$usuarioLogado = exigirAutenticacao();
+exigirPermissao(['ADMIN', 'GERENTE']);
 
 $erro = '';
 $sucesso = '';

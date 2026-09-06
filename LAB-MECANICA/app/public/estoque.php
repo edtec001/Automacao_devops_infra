@@ -1,15 +1,36 @@
 <?php
 
 require_once 'config.php';
+require_once 'auth.php';
+
+$usuarioLogado = exigirAutenticacao();
+exigirPermissao(['ESTOQUE', 'MECANICO']);
+
+// Impedir alterações no cadastro de peças se o usuário não for ESTOQUE/ADMIN/GERENTE
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !temPermissao(['ESTOQUE'])) {
+    die("Acesso Negado: Seu perfil não possui permissão para cadastrar ou modificar itens do estoque.");
+}
 
 $erro = '';
 $sucesso = '';
 
-// Cadastrar nova peça
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['acao'] === 'nova_peca') {
+$idPecaEditar = (int) ($_GET['editar'] ?? 0);
+$pecaEditar = null;
+
+if ($idPecaEditar > 0) {
+    $stmtE = $pdo->prepare("SELECT * FROM pecas WHERE id = ?");
+    $stmtE->execute([$idPecaEditar]);
+    $pecaEditar = $stmtE->fetch();
+}
+
+// 1. Cadastrar / Editar peça
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['acao'] === 'salvar_peca') {
+    $id = (int) ($_POST['id'] ?? 0);
     $codigo = trim($_POST['codigo'] ?? '');
     $nome = trim($_POST['nome'] ?? '');
+    $categoria = trim($_POST['categoria'] ?? 'Geral');
     $fabricante = trim($_POST['fabricante'] ?? '');
+    $fornecedorId = (int) ($_POST['fornecedor_id'] ?? 0);
     $unidade = trim($_POST['unidade'] ?? 'UN');
     $quantidade = (int) ($_POST['quantidade'] ?? 0);
     $estoque_minimo = (int) ($_POST['estoque_minimo'] ?? 0);
@@ -21,19 +42,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
         $erro = 'Código e Nome da peça são obrigatórios.';
     } else {
         try {
-            $stmt = $pdo->prepare("
-                INSERT INTO pecas (codigo, nome, fabricante, unidade, quantidade, estoque_minimo, preco_custo, preco_venda, localizacao)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ");
-            $stmt->execute([$codigo, $nome, $fabricante, $unidade, $quantidade, $estoque_minimo, $preco_custo, $preco_venda, $localizacao]);
-            $sucesso = 'Peça cadastrada com sucesso!';
+            if ($id > 0) {
+                $stmt = $pdo->prepare("
+                    UPDATE pecas
+                    SET codigo = ?, nome = ?, categoria = ?, fabricante = ?, fornecedor_id = ?, unidade = ?, estoque_minimo = ?, preco_custo = ?, preco_venda = ?, localizacao = ?
+                    WHERE id = ?
+                ");
+                $stmt->execute([$codigo, $nome, $categoria, $fabricante, $fornecedorId ?: null, $unidade, $estoque_minimo, $preco_custo, $preco_venda, $localizacao, $id]);
+                $sucesso = 'Dados da peça atualizados com sucesso!';
+            } else {
+                $stmt = $pdo->prepare("
+                    INSERT INTO pecas (codigo, nome, categoria, fabricante, fornecedor_id, unidade, quantidade, estoque_minimo, preco_custo, preco_venda, localizacao)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([$codigo, $nome, $categoria, $fabricante, $fornecedorId ?: null, $unidade, $quantidade, $estoque_minimo, $preco_custo, $preco_venda, $localizacao]);
+                $sucesso = 'Peça cadastrada no estoque com sucesso!';
+            }
+            $pecaEditar = null;
+            $idPecaEditar = 0;
         } catch (Exception $e) {
-            $erro = 'Erro ao cadastrar peça: ' . $e->getMessage();
+            $erro = 'Erro ao salvar peça: ' . $e->getMessage();
         }
     }
 }
 
-// Atualizar quantidade no estoque (Movimentação)
+// 2. Atualizar quantidade no estoque (Movimentação)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['acao'] === 'movimentar') {
     $peca_id = (int) ($_POST['peca_id'] ?? 0);
     $tipo = $_POST['tipo'] ?? '';
@@ -86,19 +119,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
     }
 }
 
-// Pesquisa
-$busca = trim($_GET['busca'] ?? '');
-if ($busca !== '') {
-    $stmt = $pdo->prepare("
-        SELECT * FROM pecas 
-        WHERE codigo LIKE ? OR nome LIKE ? OR fabricante LIKE ?
-        ORDER BY nome ASC
-    ");
-    $stmt->execute(['%' . $busca . '%', '%' . $busca . '%', '%' . $busca . '%']);
-} else {
-    $stmt = $pdo->query("SELECT * FROM pecas ORDER BY nome ASC");
+// 3. Excluir Peça
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['acao'] === 'excluir_peca') {
+    $pecaIdDel = (int) ($_POST['peca_id'] ?? 0);
+    try {
+        $stmt = $pdo->prepare("DELETE FROM pecas WHERE id = ?");
+        $stmt->execute([$pecaIdDel]);
+        $sucesso = 'Peça removida do estoque.';
+    } catch (Exception $e) {
+        $erro = 'Erro ao excluir peça: Não é possível remover peças que já possuem movimentações ou uso em Ordens de Serviço.';
+    }
 }
+
+// Pesquisa e Filtros
+$busca = trim($_GET['busca'] ?? '');
+$fornecedorFiltro = (int) ($_GET['fornecedor_id'] ?? 0);
+$categoriaFiltro = trim($_GET['categoria'] ?? '');
+
+$sql = "
+    SELECT p.*, f.nome_fantasia AS fornecedor_nome
+    FROM pecas p
+    LEFT JOIN fornecedores_autopecas f ON f.id = p.fornecedor_id
+    WHERE 1=1
+";
+$params = [];
+
+if ($busca !== '') {
+    $sql .= " AND (p.codigo LIKE ? OR p.nome LIKE ? OR p.fabricante LIKE ? OR p.categoria LIKE ?)";
+    $term = '%' . $busca . '%';
+    $params = [$term, $term, $term, $term];
+}
+
+if ($fornecedorFiltro > 0) {
+    $sql .= " AND p.fornecedor_id = ?";
+    $params[] = $fornecedorFiltro;
+}
+
+if ($categoriaFiltro !== '') {
+    $sql .= " AND p.categoria = ?";
+    $params[] = $categoriaFiltro;
+}
+
+$sql .= " ORDER BY p.nome ASC";
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
 $pecas = $stmt->fetchAll();
+
+// Lista Fornecedores para Dropdown
+$fornecedoresList = $pdo->query("SELECT id, nome_fantasia FROM fornecedores_autopecas WHERE ativo = 1 ORDER BY nome_fantasia ASC")->fetchAll();
+
+// Categorias Existentes
+$categoriasList = ['Geral', 'Motor', 'Freios', 'Suspensão', 'Elétrica', 'Filtros', 'Lubrificantes', 'Transmissão', 'Outros'];
 
 ?>
 <!DOCTYPE html>
@@ -112,16 +184,27 @@ $pecas = $stmt->fetchAll();
 <body>
 
 <?php
-$subtitulo = 'Controle de Estoque de Peças';
+$subtitulo = 'Controle de Estoque de Peças & Catálogo';
 include 'header.php';
 ?>
 
 <main>
     <section class="acoes">
-        <a href="index.php" class="botao secundario">← Voltar ao Dashboard</a>
+        <div>
+            <a href="autopecas.php" class="botao" style="background: #2563eb;">🏬 Gerenciar Lojas de Autopeças</a>
+            <a href="index.php" class="botao secundario">← Voltar ao Dashboard</a>
+        </div>
         
-        <form method="GET">
-            <input type="text" name="busca" placeholder="Buscar por código ou nome" value="<?= htmlspecialchars($busca) ?>">
+        <form method="GET" style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <input type="text" name="busca" placeholder="Buscar por código, nome ou fabricante" value="<?= htmlspecialchars($busca) ?>">
+            <select name="fornecedor_id" onchange="this.form.submit()" style="padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1;">
+                <option value="">Todos os Fornecedores</option>
+                <?php foreach ($fornecedoresList as $forn): ?>
+                    <option value="<?= $forn['id'] ?>" <?= $fornecedorFiltro == $forn['id'] ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($forn['nome_fantasia']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
             <button type="submit">Buscar</button>
         </form>
     </section>
@@ -134,102 +217,166 @@ include 'header.php';
         <div class="alerta sucesso"><?= htmlspecialchars($sucesso) ?></div>
     <?php endif; ?>
 
+    <!-- Form de Cadastro / Edição de Peça -->
     <div class="form-container" style="max-width: 100%; margin-bottom: 2rem;">
-        <h2>📦 Cadastrar Nova Peça</h2>
+        <h2>📦 <?= $pecaEditar ? 'Editar Peça #' . htmlspecialchars($pecaEditar['codigo']) : 'Cadastrar Nova Peça no Estoque' ?></h2>
         <form method="POST">
-            <input type="hidden" name="acao" value="nova_peca">
+            <input type="hidden" name="acao" value="salvar_peca">
+            <input type="hidden" name="id" value="<?= $pecaEditar['id'] ?? 0 ?>">
+
             <div class="linha">
                 <div class="campo">
-                    <label>Código *</label>
-                    <input type="text" name="codigo" required placeholder="EX: OLEO-5W30">
+                    <label>Código da Peça / OEM *</label>
+                    <input type="text" name="codigo" required value="<?= htmlspecialchars($pecaEditar['codigo'] ?? '') ?>" placeholder="EX: OLEO-5W30, PAST-FREIO-01">
                 </div>
                 <div class="campo">
-                    <label>Nome da Peça *</label>
-                    <input type="text" name="nome" required placeholder="EX: Óleo 5W30 Sintético">
+                    <label>Nome da Peça / Componente *</label>
+                    <input type="text" name="nome" required value="<?= htmlspecialchars($pecaEditar['nome'] ?? '') ?>" placeholder="EX: Óleo 5W30 Sintético, Pastilha de Freio Dianteira">
                 </div>
                 <div class="campo">
-                    <label>Fabricante</label>
-                    <input type="text" name="fabricante" placeholder="EX: Lubrax">
+                    <label>Categoria / Grupo</label>
+                    <select name="categoria">
+                        <?php 
+                        $catSel = $pecaEditar['categoria'] ?? 'Geral';
+                        foreach ($categoriasList as $c): 
+                        ?>
+                            <option value="<?= $c ?>" <?= $catSel === $c ? 'selected' : '' ?>><?= $c ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
             </div>
+
             <div class="linha">
                 <div class="campo">
-                    <label>Unidade</label>
-                    <input type="text" name="unidade" value="UN" placeholder="UN, L, KG, Par">
+                    <label>Fabricante / Marca</label>
+                    <input type="text" name="fabricante" value="<?= htmlspecialchars($pecaEditar['fabricante'] ?? '') ?>" placeholder="EX: Bosch, Tecfil, Lubrax, Fras-le">
                 </div>
                 <div class="campo">
-                    <label>Quantidade Inicial</label>
-                    <input type="number" name="quantidade" min="0" value="0">
+                    <label>Loja de Autopeças (Fornecedor)</label>
+                    <select name="fornecedor_id">
+                        <option value="">-- Sem Fornecedor Especificado --</option>
+                        <?php 
+                        $fornSel = $pecaEditar['fornecedor_id'] ?? 0;
+                        foreach ($fornecedoresList as $f): 
+                        ?>
+                            <option value="<?= $f['id'] ?>" <?= $fornSel == $f['id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($f['nome_fantasia']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="campo">
-                    <label>Estoque Mínimo</label>
-                    <input type="number" name="estoque_minimo" min="0" value="5">
+                    <label>Unidade de Medida</label>
+                    <input type="text" name="unidade" value="<?= htmlspecialchars($pecaEditar['unidade'] ?? 'UN') ?>" placeholder="UN, L, KG, Par, Jogo">
                 </div>
             </div>
+
             <div class="linha">
+                <?php if (!$pecaEditar): ?>
+                    <div class="campo">
+                        <label>Quantidade Inicial no Estoque</label>
+                        <input type="number" name="quantidade" min="0" value="0">
+                    </div>
+                <?php endif; ?>
                 <div class="campo">
-                    <label>Preço Custo (R$)</label>
-                    <input type="text" name="preco_custo" placeholder="0.00">
+                    <label>Estoque Mínimo (Alerta)</label>
+                    <input type="number" name="estoque_minimo" min="0" value="<?= htmlspecialchars($pecaEditar['estoque_minimo'] ?? '5') ?>">
                 </div>
                 <div class="campo">
-                    <label>Preço Venda (R$)</label>
-                    <input type="text" name="preco_venda" placeholder="0.00">
+                    <label>Preço de Custo R$ (Aquisição)</label>
+                    <input type="text" name="preco_custo" value="<?= number_format($pecaEditar['preco_custo'] ?? 0, 2, ',', '.') ?>" placeholder="0,00">
                 </div>
                 <div class="campo">
-                    <label>Localização</label>
-                    <input type="text" name="localizacao" placeholder="EX: Prateleira A01">
+                    <label>Preço de Venda R$ (Oficina)</label>
+                    <input type="text" name="preco_venda" value="<?= number_format($pecaEditar['preco_venda'] ?? 0, 2, ',', '.') ?>" placeholder="0,00">
+                </div>
+                <div class="campo">
+                    <label>Localização / Prateleira</label>
+                    <input type="text" name="localizacao" value="<?= htmlspecialchars($pecaEditar['localizacao'] ?? '') ?>" placeholder="EX: Prateleira A01, Gaveta B3">
                 </div>
             </div>
-            <button type="submit" class="botao">+ Cadastrar Peça</button>
+
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="botao" style="font-weight: bold;">
+                    <?= $pecaEditar ? '💾 Salvar Alterações na Peça' : '+ Cadastrar Peça' ?>
+                </button>
+                <?php if ($pecaEditar): ?>
+                    <a href="estoque.php" class="botao secundario">Cancelar Edição</a>
+                <?php endif; ?>
+            </div>
         </form>
     </div>
 
+    <!-- Tabela de Itens em Estoque -->
     <section class="tabela">
         <h2>Itens em Estoque</h2>
         <table>
             <thead>
                 <tr>
                     <th>Código</th>
-                    <th>Nome</th>
+                    <th>Nome da Peça</th>
+                    <th>Categoria</th>
                     <th>Fabricante</th>
-                    <th>Qtd Atual</th>
-                    <th>Mínimo</th>
+                    <th>Loja Autopeças</th>
+                    <th>Estoque Atual</th>
+                    <th>Preço Custo</th>
                     <th>Preço Venda</th>
-                    <th>Localização</th>
-                    <th>Ação</th>
+                    <th>Local</th>
+                    <th>Ações & Entrada/Saída</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (!$pecas): ?>
                     <tr>
-                        <td colspan="8">Nenhuma peça encontrada.</td>
+                        <td colspan="10" style="text-align: center;">Nenhuma peça encontrada.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($pecas as $p): ?>
                         <tr>
                             <td><strong><?= htmlspecialchars($p['codigo']) ?></strong></td>
-                            <td><?= htmlspecialchars($p['nome']) ?></td>
+                            <td>
+                                <strong><?= htmlspecialchars($p['nome']) ?></strong>
+                            </td>
+                            <td><span style="background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;"><?= htmlspecialchars($p['categoria'] ?? 'Geral') ?></span></td>
                             <td><?= htmlspecialchars($p['fabricante'] ?? '-') ?></td>
+                            <td>
+                                <?php if ($p['fornecedor_nome']): ?>
+                                    <span style="color: #2563eb; font-size: 0.85rem; font-weight: bold;">🏬 <?= htmlspecialchars($p['fornecedor_nome']) ?></span>
+                                <?php else: ?>
+                                    <span style="color: #94a3b8;">-</span>
+                                <?php endif; ?>
+                            </td>
                             <td>
                                 <strong><?= $p['quantidade'] ?></strong> <?= htmlspecialchars($p['unidade']) ?>
                                 <?php if ($p['quantidade'] <= $p['estoque_minimo']): ?>
-                                    <span style="color: #e74c3c; font-weight: bold;" title="Estoque baixo!">⚠️ Baixo</span>
+                                    <span style="color: #e74c3c; font-weight: bold; display: block; font-size: 0.75rem;" title="Estoque crítico!">⚠️ Mínimo: <?= $p['estoque_minimo'] ?></span>
                                 <?php endif; ?>
                             </td>
-                            <td><?= $p['estoque_minimo'] ?></td>
-                            <td>R$ <?= number_format($p['preco_venda'], 2, ',', '.') ?></td>
+                            <td>R$ <?= number_format($p['preco_custo'], 2, ',', '.') ?></td>
+                            <td><strong style="color: #16a34a;">R$ <?= number_format($p['preco_venda'], 2, ',', '.') ?></strong></td>
                             <td><?= htmlspecialchars($p['localizacao'] ?? '-') ?></td>
                             <td>
-                                <form method="POST" style="display: inline-flex; gap: 5px; align-items: center;">
-                                    <input type="hidden" name="acao" value="movimentar">
-                                    <input type="hidden" name="peca_id" value="<?= $p['id'] ?>">
-                                    <select name="tipo" style="padding: 4px; border-radius: 4px;">
-                                        <option value="ENTRADA">+ Entrada</option>
-                                        <option value="SAIDA">- Saída</option>
-                                    </select>
-                                    <input type="number" name="quantidade" min="1" value="1" style="width: 50px; padding: 4px;">
-                                    <button type="submit" class="botao" style="padding: 4px 8px; font-size: 0.8rem;">OK</button>
-                                </form>
+                                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                    <!-- Form Rápido Entrada/Saída -->
+                                    <form method="POST" style="display: inline-flex; gap: 4px; align-items: center;">
+                                        <input type="hidden" name="acao" value="movimentar">
+                                        <input type="hidden" name="peca_id" value="<?= $p['id'] ?>">
+                                        <select name="tipo" style="padding: 4px; border-radius: 4px; font-size: 0.8rem;">
+                                            <option value="ENTRADA">+ Entrada</option>
+                                            <option value="SAIDA">- Saída</option>
+                                        </select>
+                                        <input type="number" name="quantidade" min="1" value="1" style="width: 45px; padding: 4px; font-size: 0.8rem;">
+                                        <button type="submit" class="botao" style="padding: 4px 8px; font-size: 0.8rem;">OK</button>
+                                    </form>
+
+                                    <a href="estoque.php?editar=<?= $p['id'] ?>" class="link" style="color: #d97706; font-size: 0.85rem;">✏️ Editar</a>
+
+                                    <form method="POST" style="display: inline;" onsubmit="return confirm('Remover esta peça do estoque?');">
+                                        <input type="hidden" name="acao" value="excluir_peca">
+                                        <input type="hidden" name="peca_id" value="<?= $p['id'] ?>">
+                                        <button type="submit" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 0.9rem;" title="Excluir peça">❌</button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>

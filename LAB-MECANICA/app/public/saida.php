@@ -1,6 +1,9 @@
 <?php
 
 require_once 'config.php';
+require_once 'auth.php';
+
+$usuarioLogado = exigirAutenticacao();
 
 $placa = strtoupper(trim($_REQUEST['placa'] ?? ''));
 $erro = '';
@@ -149,8 +152,11 @@ include 'header.php';
                 O pagamento foi processado e o comando para desligar o LED do Arduino foi enviado.
             </div>
 
-            <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
                 <a href="os.php?placa=<?= urlencode($placa) ?>" class="botao">📋 Ver Ordem de Serviço & Recibo</a>
+                <?php if (!empty($veiculo['os_id'])): ?>
+                    <a href="notas.php?emitir_os=<?= $veiculo['os_id'] ?>" class="botao" style="background: #16a34a;">📄 Emitir Nota Fiscal</a>
+                <?php endif; ?>
                 <a href="index.php" class="botao secundario">← Voltar ao Dashboard</a>
             </div>
         <?php else: ?>
