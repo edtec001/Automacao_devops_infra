@@ -399,11 +399,16 @@ include 'header.php';
                     <input
                         type="text"
                         name="marca"
-                        placeholder="Chevrolet"
+                        id="input-marca"
+                        list="lista-marcas"
+                        placeholder="Chevrolet (selecione ou digite)"
+                        autocomplete="off"
                         value="<?= htmlspecialchars(
                             $_POST['marca'] ?? ''
                         ) ?>"
                     >
+
+                    <datalist id="lista-marcas"></datalist>
 
                 </div>
 
@@ -415,12 +420,17 @@ include 'header.php';
                     <input
                         type="text"
                         name="modelo"
+                        id="input-modelo"
+                        list="lista-modelos"
                         required
-                        placeholder="Onix"
+                        placeholder="Onix (selecione ou digite)"
+                        autocomplete="off"
                         value="<?= htmlspecialchars(
                             $_POST['modelo'] ?? ''
                         ) ?>"
                     >
+
+                    <datalist id="lista-modelos"></datalist>
 
                 </div>
 
@@ -433,15 +443,23 @@ include 'header.php';
 
                     <label>Ano</label>
 
-                    <input
-                        type="number"
-                        name="ano"
-                        min="1900"
-                        max="2100"
-                        value="<?= htmlspecialchars(
-                            $_POST['ano'] ?? ''
-                        ) ?>"
-                    >
+                    <select name="ano" id="select-ano">
+
+                        <option value="">Selecione o ano</option>
+
+<?php
+$anoAtual = (int) date('Y') + 1;
+$anoSelecionado = (int) ($_POST['ano'] ?? 0);
+for ($a = $anoAtual; $a >= 1970; $a--):
+?>
+
+                        <option value="<?= $a ?>" <?= $anoSelecionado === $a ? 'selected' : '' ?>>
+                            <?= $a ?>
+                        </option>
+
+<?php endfor; ?>
+
+                    </select>
 
                 </div>
 
@@ -651,7 +669,80 @@ for ($i = 1; $i <= 10; $i++) {
 
     </div>
 
-</main>
+<script>
+const marcasEModelos = {
+    "Chevrolet": ["Onix", "Onix Plus", "Prisma", "Celta", "Classic", "Corsa", "Astra", "Vectra", "Tracker", "S10", "Spin", "Cruze", "Montana", "Equinox", "Trailblazer", "Meriva", "Zafira", "Agile", "Cobalt", "Kadett", "Monza", "Opala", "Omega"],
+    "Volkswagen": ["Gol", "Voyage", "Fox", "Polo", "Virtus", "T-Cross", "Nivus", "Taos", "Saveiro", "Amarok", "Jetta", "Golf", "Up!", "Parati", "Santana", "Kombi", "Fusca", "Bora", "SpaceFox", "Passat", "Tiguan"],
+    "Fiat": ["Uno", "Palio", "Siena", "Grand Siena", "Strada", "Toro", "Mobi", "Argo", "Cronos", "Pulse", "Fastback", "Fiorino", "Idea", "Punto", "Stilo", "Doblo", "Linea", "Ducato", "Tempra", "Marea", "147", "Titano"],
+    "Ford": ["Ka", "Ka+", "Fiesta", "Focus", "EcoSport", "Ranger", "Fusion", "Courier", "Escort", "Verona", "Belina", "Corcel", "F-1000", "F-250", "Edge", "Territory", "Maverick", "Bronco Sport"],
+    "Toyota": ["Corolla", "Corolla Cross", "Hilux", "SW4", "Etios", "Yaris", "RAV4", "Fielder", "Camry", "Corona", "Bandeirante", "Prius"],
+    "Honda": ["Civic", "Fit", "City", "HR-V", "WR-V", "CR-V", "Accord", "ZR-V"],
+    "Hyundai": ["HB20", "HB20S", "HB20X", "Creta", "Tucson", "ix35", "Santa Fe", "i30", "Azera", "Elantra", "HR", "Veloster"],
+    "Renault": ["Kwid", "Sandero", "Logan", "Duster", "Captur", "Oroch", "Master", "Clio", "Megane", "Scenic", "Fluence", "Kardian", "Symbol"],
+    "Nissan": ["Kicks", "March", "Versa", "Sentra", "Frontier", "Tiida", "Livina"],
+    "Jeep": ["Renegade", "Compass", "Commander", "Wrangler", "Cherokee", "Grand Cherokee"],
+    "Peugeot": ["208", "2008", "3008", "206", "207", "307", "308", "408", "Partner", "Boxer", "Expert"],
+    "Citroën": ["C3", "C3 Aircross", "C4 Cactus", "C4 Lounge", "C4 Pallas", "Aircross", "Berlingo", "Jumper", "Jumpy"],
+    "Mitsubishi": ["L200 Triton", "ASX", "Outlander", "Pajero", "Pajero TR4", "Pajero Full", "Eclipse Cross", "Lancer"],
+    "Chery": ["Tiggo 2", "Tiggo 3x", "Tiggo 5x", "Tiggo 7", "Tiggo 8", "QQ", "Celer", "Arrizo 5", "Arrizo 6"],
+    "BMW": ["320i", "328i", "Série 1", "Série 3", "X1", "X3", "X5", "X6", "Série 5"],
+    "Mercedes-Benz": ["Classe A", "Classe C", "Classe E", "GLA", "GLC", "Sprinter"],
+    "Audi": ["A3", "A4", "A5", "A6", "Q3", "Q5", "Q7"],
+    "Kia": ["Sportage", "Cerato", "Picanto", "Sorento", "Soul", "Bongo", "Stonic", "Niro"],
+    "Volvo": ["XC40", "XC60", "XC90", "C40", "V40"],
+    "RAM": ["Rampage", "1500", "2500", "3500"],
+    "BYD": ["Dolphin", "Dolphin Mini", "Seal", "Song Plus", "Yuan Plus", "King", "Shark"]
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    const inputMarca = document.getElementById('input-marca');
+    const datalistMarcas = document.getElementById('lista-marcas');
+    const inputModelo = document.getElementById('input-modelo');
+    const datalistModelos = document.getElementById('lista-modelos');
+
+    if (!inputMarca || !datalistMarcas || !inputModelo || !datalistModelos) return;
+
+    function popularMarcas() {
+        datalistMarcas.innerHTML = '';
+        Object.keys(marcasEModelos).sort().forEach(function(marca) {
+            const option = document.createElement('option');
+            option.value = marca;
+            datalistMarcas.appendChild(option);
+        });
+    }
+
+    function atualizarModelos() {
+        datalistModelos.innerHTML = '';
+        const marcaSelecionada = inputMarca.value.trim();
+        
+        let modelos = [];
+        const marcaEncontrada = Object.keys(marcasEModelos).find(function(m) {
+            return m.toLowerCase() === marcaSelecionada.toLowerCase();
+        });
+        
+        if (marcaEncontrada) {
+            modelos = marcasEModelos[marcaEncontrada];
+        } else {
+            Object.values(marcasEModelos).forEach(function(lista) {
+                modelos = modelos.concat(lista);
+            });
+            modelos = Array.from(new Set(modelos));
+        }
+
+        modelos.sort().forEach(function(modelo) {
+            const option = document.createElement('option');
+            option.value = modelo;
+            datalistModelos.appendChild(option);
+        });
+    }
+
+    popularMarcas();
+    atualizarModelos();
+
+    inputMarca.addEventListener('input', atualizarModelos);
+    inputMarca.addEventListener('change', atualizarModelos);
+});
+</script>
 
 </body>
 
